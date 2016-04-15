@@ -14,6 +14,7 @@ class StatusType(object):
     """
         class to define numbers for status types
     """
+    UNKNOWN = -1  # only used in db setting
     SUCCESS = 1
     TIMEOUT = 2
     CRASHED = 3
@@ -75,7 +76,7 @@ class ExecuteTARun(object):
                 status: enum of StatusType (int)
                     {SUCCESS, TIMEOUT, CRASHED, ABORT}
                 cost: float
-                    cost/regret/quality (float) (None, if not returned by TA)
+                    cost/regret/quality (float) 
                 runtime: float
                     runtime (None if not returned by TA)
                 additional_info: dict

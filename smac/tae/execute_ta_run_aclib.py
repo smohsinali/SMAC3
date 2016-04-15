@@ -75,7 +75,7 @@ class ExecuteTARunAClib(object):
                 status: enum of StatusType (int)
                     {SUCCESS, TIMEOUT, CRASHED, ABORT}
                 cost: float
-                    cost/regret/quality/runtime (float) (None, if not returned by TA)
+                    cost/regret/quality/runtime (float)
                 runtime: float
                     runtime (None if not returned by TA)
                 additional_info: dict
