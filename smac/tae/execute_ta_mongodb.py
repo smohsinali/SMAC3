@@ -2,6 +2,7 @@ import logging
 import time
 import sys
 import pickle
+import json
 from smac.tae.execute_ta_run import ExecuteTARun, StatusType
 
 __author__ = "Marius Lindauer"
@@ -61,7 +62,8 @@ class ExecuteTAMongoDB(ExecuteTARun):
 
         # this requires that SMAC and the worker is working in the same
         # directory
-        with open("tae_runner.pkl", "wb") as fp:
+        tae_run_fn = "tae_runner.pkl"
+        with open(tae_run_fn, "wb") as fp:
             pickle.dump(tae_runner, fp)
 
     def run(self, config, instance,
@@ -119,6 +121,7 @@ class ExecuteTAMongoDB(ExecuteTARun):
                 "additional_info": {}
             }
             })
+        
 
         warn_factor = self.WARN_FACTOR
         status = StatusType.UNKNOWN
@@ -138,4 +141,4 @@ class ExecuteTAMongoDB(ExecuteTARun):
                 self.logger.error("ABORT SMAC run")
                 sys.exit(44)
 
-        return status, dat["result"]["cost"], dat["result"]["runtime"], dat["result"]["addtional_info"]
+        return status, dat["result"]["cost"], dat["result"]["runtime"], dat["result"]["additional_info"]
