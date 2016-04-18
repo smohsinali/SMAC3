@@ -33,7 +33,7 @@ class ExecuteTAFunc(object):
             penalized average runtime factor
     """
 
-    def __init__(self, func, run_obj="quality", par_factor=1):
+    def __init__(self, func, run_obj="quality", par_factor=1, logger=logging.getLogger("ExecuteTARun")):
         """
         Constructor
 
@@ -45,9 +45,11 @@ class ExecuteTAFunc(object):
                 run objective of SMAC
             par_factor: int
                 penalized average runtime factor
+            logger: Logger from logging
+                logger object
         """
         self.func = func
-        self.logger = logging.getLogger("ExecuteTAFunc")
+        self.logger = logger
         self.run_obj = run_obj
         self.par_factor = par_factor
 

@@ -34,7 +34,7 @@ class ExecuteTARun(object):
             the command line call to the target algorithm (wrapper)
     """
 
-    def __init__(self, ta, run_obj="runtime"):
+    def __init__(self, ta, run_obj="runtime", par_factor=1, logger=logging.getLogger("ExecuteTARun")):
         """
         Constructor
 
@@ -44,6 +44,10 @@ class ExecuteTARun(object):
                 target algorithm command line as list of arguments
             run_obj: str
                 run objective of SMAC
+            par_factor: int
+                penalized average runtime factor
+            logger: Logger from logging
+                logger object
         """
         self.ta = ta
         self.logger = logging.getLogger("ExecuteTARun")

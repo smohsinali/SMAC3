@@ -1,7 +1,7 @@
 import logging
 import time
 import sys
-import cPickle
+import pickle
 from smac.tae.execute_ta_run import ExecuteTARun, StatusType
 
 __author__ = "Marius Lindauer"
@@ -61,8 +61,8 @@ class ExecuteTAMongoDB(ExecuteTARun):
 
         # this requires that SMAC and the worker is working in the same
         # directory
-        with open("tae_runner.pkl", "w") as fp:
-            fp.dump(tae_runner, fp)
+        with open("tae_runner.pkl", "wb") as fp:
+            pickle.dump(tae_runner, fp)
 
     def run(self, config, instance,
             cutoff=99999999999999.,
