@@ -26,6 +26,7 @@ setuptools.setup(
         "Topic :: Utilities",
         "License :: OSI Approved :: GPLv3 License",
     ],
+    extras_require = {'pymongo_worker':  ["pymongo"]},          
     platforms=['Linux'],
     install_requires=requirements,
     test_suite='nose.collector'
