@@ -25,6 +25,10 @@ class TaeMongoDBTest(unittest.TestCase):
         self.logger = logging.getLogger()  # root logger
         self.logger.setLevel(logging.DEBUG)
 
+    def tearDown(self):
+        if os.path.isfile("tae_runner.pkl"):
+            os.remove("tae_runner.pkl")
+
     def test_run(self):
         '''
             running some simple algo via the mongodb worker interface
@@ -75,6 +79,8 @@ class TaeMongoDBTest(unittest.TestCase):
         assert runtime == 1
 
         p.terminate()
+
+        
 
 if __name__ == "__main__":
     unittest.main()
