@@ -121,7 +121,6 @@ class ExecuteTAMongoDB(ExecuteTARun):
                 "additional_info": {}
             }
             })
-        
 
         warn_factor = self.WARN_FACTOR
         status = StatusType.UNKNOWN
@@ -131,11 +130,11 @@ class ExecuteTAMongoDB(ExecuteTARun):
                 self.collection.find({'_id': insert_obj.inserted_id}))[0]
             status = dat["result"]["status"]
 
-            if time.time() - insert_time > cutoff * warn_factor:
+            if time.time() - insert_time > max(1, cutoff) * warn_factor:
                 self.logger.warn(
                     "TA has not returned since %.2f secs -- more than %d times more than expected" % (time.time() - insert_time, warn_factor))
                 warn_factor *= 2
-            if time.time() - insert_time > cutoff * self.ABORT_FACTOR:
+            if time.time() - insert_time > max(1, cutoff) * self.ABORT_FACTOR:
                 self.logger.error("TA has not returned since %.2f secs -- more than %d times more than expected" % (
                     time.time() - insert_time, self.ABORT_FACTOR))
                 self.logger.error("ABORT SMAC run")

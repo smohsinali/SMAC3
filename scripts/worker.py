@@ -8,6 +8,7 @@ import sys
 import os
 import pickle
 import logging
+import time
 
 from pymongo import MongoClient
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
@@ -48,6 +49,10 @@ class Worker(object):
         self.max_wait = max_wait
         self.tae_runner_fn = tae_runner_fn
         self.tae_runner = None
+        
+        self.PULL_INTERVALL = 5 # sec
+        
+        self.logger = logging.getLogger("MongoWorker")
 
     def _load_tae(self):
         with open(self.tae_runner_fn, "rb") as fp:
@@ -60,54 +65,66 @@ class Worker(object):
             runs them with provided tae_runner
             and adds result to DB
         '''
+        
+        st = time.time()
+        while time.time() - st < self.max_wait:
+            while True:
+                cursor = self.collection.find({"result.status": StatusType.UNKNOWN})
+                try:
+                    job = next(cursor)
+                    successful = False
+                    try:
+                        self.collection.update_one({'_id': job['_id']}, {"$set": {
+                            "result.status": -2
+                        },
+                            #"$currentDate": {"lastModified": True}
+                        })
+        
+                        # load tae runner the first time we find new jobs in DB
+                        if not self.tae_runner:
+                            self._load_tae()
+        
+                        status, cost, runtime, additional_info = self.tae_runner.run(
+                                                                    config=job["data"]["config"],
+                                                                    instance=job["data"]["instance"],
+                                                                    cutoff=job["data"]["cutoff"],
+                                                                    seed=job["data"]["seed"],
+                                                                    instance_specific=job["data"]["instance_specific"]
+                                                                                     )
+                        self.logger.debug("%s, %s, %f, %f" %(job['_id'], status, cost, runtime))
+        
+                        self.collection.update_one({'_id': job['_id']}, {"$set": {
+                            "result.status": status,
+                            "result.cost": cost,
+                            "result.runtime": runtime,
+                            "result.additional_info": additional_info
+                        },
+                        #   "$currentDate": {"lastModified": True}
+                        })
+                        successful = True
+        
+                    finally:
+                        if not successful:
+                            # return to UNKNOWN if something went wrong
+                            self.collection.update_one({'_id': job['_id']}, {"$set": {
+                                "result.status": StatusType.UNKNOWN
+                            },
+                            #    "$currentDate": {"lastModified": True}
+                            })
+                        st = time.time()
+                except StopIteration:
+                    break
+        
+            self.logger.debug("No further job found ... going to sleep for %d seconds (time left before exit: %d)" 
+                              %(self.PULL_INTERVALL, self.max_wait - (time.time() - st) ))
+            time.sleep(self.PULL_INTERVALL)
+        
 
-        cursor = self.collection.find({"result.status": StatusType.UNKNOWN})
-        try:
-            job = next(cursor)
-            successful = False
-            try:
-                self.collection.update_one({'_id': job['_id']}, {"$set": {
-                    "result.status": -2
-                },
-                    "$currentDate": {"lastModified": True}
-                })
-
-                # load tae runner the first time we find new jobs in DB
-                if not self.tae_runner:
-                    self._load_tae()
-
-                status, cost, runtime, additional_info = self.tae_runner.run(
-                                                            config=job["data"]["config"],
-                                                            instance=job["data"]["instance"],
-                                                            cutoff=job["data"]["cutoff"],
-                                                            seed=job["data"]["seed"],
-                                                            instance_specific=job["data"]["instance_specific"]
-                                                                             )
-
-                self.collection.update_one({'_id': job['_id']}, {"$set": {
-                    "result.status": status,
-                    "result.cost": cost,
-                    "result.runtime": runtime,
-                    "result.additional_info": additional_info
-                },
-                    "$currentDate": {"lastModified": True}
-                })
-                successful = True
-
-            finally:
-                if not successful:
-                    # return to UNKNOWN if something went wrong
-                    self.collection.update_one({'_id': job['_id']}, {"$set": {
-                        "result.status": StatusType.UNKNOWN
-                    },
-                        "$currentDate": {"lastModified": True}
-                    })
-        except StopIteration:
-            pass
-
-        cursor = self.collection.find()
-        for j in cursor:
-            print(j)
+        #=======================================================================
+        # cursor = self.collection.find()
+        # for j in cursor:
+        #     print(j)
+        #=======================================================================
 
 
 def parse_cmd():
@@ -135,6 +152,7 @@ def parse_cmd():
 
     args_ = parser.parse_args()
     
+    logging.basicConfig(level=args_.verbose)
     root_logger = logging.getLogger()
     root_logger.setLevel(args_.verbose)
     
