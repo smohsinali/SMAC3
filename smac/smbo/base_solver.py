@@ -84,12 +84,10 @@ class BaseSolver(object):
         """
         pass
 
-    def choose_next(self, X, Y):
+    def select_configurations(self):
         """
         Chooses the next configuration by optimizing the acquisition function.
 
-        :param X: The point that have been where the objective function has been evaluated
-        :param Y: The function values of the evaluated points
         :return: The next promising configuration
         """
         pass

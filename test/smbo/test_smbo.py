@@ -90,17 +90,20 @@ class TestSMBO(unittest.TestCase):
                                 'np.random.RandomState',
                                 SMBO, self.scenario, rng='BLA')
 
-    def test_choose_next(self):
+    def test_select_configurations(self):
         seed = 42
         smbo = SMBO(self.scenario, seed)
         smbo.runhistory = RunHistory()
-        X = self.scenario.cs.sample_configuration().get_array()[None, :]
 
+        X = self.scenario.cs.sample_configuration().get_array()[None, :]
         Y = self.branin(X)
-        x = smbo.choose_next(X, Y)[0].get_array()
+        smbo.model.train(X, Y)
+        smbo.acquisition_func.update(model=smbo.model, eta=0.0)
+
+        x = smbo.select_configurations()[0].get_array()
         assert x.shape == (2,)
 
-    def test_choose_next_2(self):
+    def test_select_configurations_2(self):
         def side_effect(X, derivative):
             return np.mean(X, axis=1).reshape((-1, 1))
 
@@ -116,8 +119,10 @@ class TestSMBO(unittest.TestCase):
 
         X = smbo.rng.rand(10, 2)
         Y = smbo.rng.rand(10, 1)
+        smbo.model.train(X, Y)
+        smbo.acquisition_func.update(model=smbo.model, eta=0.0)
 
-        x = smbo.choose_next(X, Y)
+        x = smbo.select_configurations()
 
         self.assertEqual(smbo.model.train.call_count, 1)
         self.assertEqual(smbo.acquisition_func._compute.call_count, 1)

@@ -91,9 +91,6 @@ class SMBO(BaseSolver):
         rng: numpy.random.RandomState
             Random number generator
         '''
-        
-        self.runhistory = RunHistory()
-        
         self.logger = logging.getLogger("smbo")
 
         if rng is None:
@@ -184,6 +181,7 @@ class SMBO(BaseSolver):
                              'quality or runtime.' % self.scenario.run_obj)
 
         self.trajLogger = TrajLogger()
+        self.runhistory = RunHistory()
 
     def run_initial_design(self):
         '''
@@ -230,11 +228,13 @@ class SMBO(BaseSolver):
         self.runhistory.update_cost(default_conf, default_perf)
 
         Stats.inc_changed += 1  # first incumbent
-        return default_conf
+        return default_conf, default_perf
 
     def run(self, max_iters=10):
-        '''
-        Runs the Bayesian optimization loop for max_iters iterations
+        """Run the Bayesian optimization loop for max_iters iterations.
+
+        This implements Algorithm Framework 1: Sequential Model-Based
+        Optimization (SMBO) of Hutter, Hoos and Leyton-Brown (Lion 2011).
 
         Parameters
         ----------
@@ -245,12 +245,11 @@ class SMBO(BaseSolver):
         ----------
         incumbent: np.array(1, H)
             The best found configuration
-        '''
+        """
         Stats.start_timing()
 
-        #self.runhistory = RunHisory()
-
-        self.incumbent = self.run_initial_design()
+        # Line 1
+        self.incumbent, inc_perf = self.run_initial_design()
 
         self.trajLogger.add_entry(train_perf=999999999,
                                   incumbent_id=Stats.inc_changed,
@@ -260,21 +259,27 @@ class SMBO(BaseSolver):
 
         # Main BO loop
         iteration = 1
+
+        # Line 2
         while True:
-
             start_time = time.time()
-            X, Y = self.rh2EPM.transform(self.runhistory)
 
+            # Line 3
+            X, Y = self.rh2EPM.transform(self.runhistory)
+            self.model.train(X, Y)
+            self.acquisition_func.update(model=self.model, eta=inc_perf)
+
+            # line 4
             self.logger.debug("Search for next configuration")
             # get all found configurations sorted according to acq
-            challengers = self.choose_next(X, Y)
+            challengers = self.select_configurations(X, Y)
 
             time_spend = time.time() - start_time
             logging.debug(
                 "Time spend to choose next configurations: %.2f sec" % (time_spend))
 
+            # Line 5
             self.logger.debug("Intensify")
-
             self.incumbent, inc_perf = self.inten.intensify(
                 challengers=challengers,
                 incumbent=self.incumbent,
@@ -284,6 +289,7 @@ class SMBO(BaseSolver):
 
             # TODO: Write run history into database
 
+            # Line 6
             if iteration == max_iters:
                 break
 
@@ -305,46 +311,55 @@ class SMBO(BaseSolver):
                                           incumbent=self.incumbent)
                 inc_id = Stats.inc_changed
 
+        # Line 7
         return self.incumbent
 
-    def choose_next(self, X, Y, num_interleaved_random=1010,
-                    num_configurations_by_random_search_sorted=1000,
-                    num_configurations_by_local_search=10):
-        """Choose next candidate solution with Bayesian optimization.
+    def select_configurations(self,
+                              num_configurations_by_local_search=10,
+                              num_configurations_by_random_search=1000):
+        """Select candidate configurations with Bayesian optimization.
+
+        Performs :python:`num_configurations_by_local_search` local searches
+        and generates :python:`num_configurations_by_random_search`
+        and sorts these configurations by their acquisition function value.
+        Interleaves randomly-sampled configurations in order to provide
+        unbiased training data for future models.
 
         Parameters
         ----------
-        X : (N, D) numpy array
-            Each row contains a configuration and one set of
-            instance features.
-        Y : (N, O) numpy array
-            The function values for each configuration instance pair.
+
+        num_configurations_by_local_search : int, default=10
+            Number of local searches.
+
+        num_configurations_by_random_search : int, default=1000
+            Number of configurations generated with random search.
 
         Returns
         -------
         list
-            List of 2020 suggested configurations to evaluate.
+            List of :python:`num_configurations_by_local_search +
+            num_configurations_by_random_search` suggested configurations to
+            evaluate.
         """
-        self.model.train(X, Y)
 
-        if self.runhistory.empty():
-            incumbent_value = 0.0
-        elif self.incumbent is None:
-            # TODO try to calculate an incumbent from the runhistory!
-            incumbent_value = 0.0
-        else:
-            incumbent_value = self.runhistory.get_cost(self.incumbent)
-
-        self.acquisition_func.update(model=self.model, eta=incumbent_value)
+        # Very basic type-checking because I already passed in the wrong
+        # arguments here...
+        num_configurations_by_local_search = int(
+            num_configurations_by_local_search)
+        num_configurations_by_random_search = int(
+            num_configurations_by_random_search)
 
         # Remove dummy acquisition function value
+        num_interleaved_random = num_configurations_by_local_search + \
+                                 num_configurations_by_random_search
         next_configs_by_random_search = [x[1] for x in
-                                         self._get_next_by_random_search(num_points=num_interleaved_random)]
+                                         self._get_next_by_random_search(
+                                             num_points=num_interleaved_random)]
 
         # Get configurations sorted by EI
         next_configs_by_random_search_sorted = \
             self._get_next_by_random_search(
-                num_configurations_by_random_search_sorted, _sorted=True)
+                num_configurations_by_random_search, _sorted=True)
         next_configs_by_local_search = \
             self._get_next_by_local_search(num_configurations_by_local_search)
 
@@ -362,6 +377,7 @@ class SMBO(BaseSolver):
 
         Parameters
         ----------
+
         num_points : int, optional (default=10)
             Number of local searches and returned values.
 
@@ -371,6 +387,7 @@ class SMBO(BaseSolver):
 
         Returns
         -------
+
         list : (acquisition value, Candidate solutions)
         """
 
