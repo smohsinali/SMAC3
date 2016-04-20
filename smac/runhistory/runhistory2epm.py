@@ -19,6 +19,7 @@ __version__ = "0.0.1"
 
 
 class RunType(object):
+
     '''
        class to define numbers for status types.
        Makes life easier in select_runs
@@ -37,7 +38,9 @@ class AbstractRunHistory2EPM(object):
 
     def __init__(self, scenario, num_params,
                  success_states=None,
-                 impute_censored_data=False, impute_state=None, imputor=None,
+                 impute_censored_data=False,
+                 impute_state=None,
+                 imputor=None,
                  rs=None):
         '''
         Constructor
@@ -47,6 +50,8 @@ class AbstractRunHistory2EPM(object):
             Algorithm Configuration Scenario
         num_params : int
             number of parameters in config space
+        instances: list
+            list of instance names
         success_states: list, optional
             list of states considered as successful (such as StatusType.SUCCESS)
         impute_censored_data: bool, optional
@@ -65,6 +70,7 @@ class AbstractRunHistory2EPM(object):
         self.scenario = scenario
         self.rs = rs
         self.num_params = num_params
+        self.instances = scenario.train_insts
 
         # Configuration
         self.success_states = success_states
@@ -89,9 +95,6 @@ class AbstractRunHistory2EPM(object):
             'cutoff_time': scenario.cutoff,
             'impute_state': impute_state,
         })
-
-        self.instance_features = scenario.feature_dict
-        self.n_feats = scenario.n_features
 
         self.logger = logging.getLogger("runhistory2epm")
         self.num_params = num_params
@@ -118,6 +121,8 @@ class AbstractRunHistory2EPM(object):
 
     @abc.abstractmethod
     def _build_matrix(self, run_list, runhistory, instances=None):
+        # TODO: why is "instances" an argument? it is never used in the methods
+        # down below
         raise NotImplementedError()
 
     def transform(self, runhistory):
@@ -128,6 +133,12 @@ class AbstractRunHistory2EPM(object):
         ----------
         runhistory : list of dicts
                 parameter configurations
+
+        Returns
+        -------
+        configs: np.ndarray of shape = [n_configs, n_params]
+        f_map: np.ndarray of shape = [n_samples, 2]
+        y: np.ndarray of shape = [n_samples,]
         '''
         assert isinstance(runhistory, RunHistory)
 
@@ -136,21 +147,21 @@ class AbstractRunHistory2EPM(object):
                                         select=RunType.SUCCESS)
         # Store a list of instance IDs
         s_instance_id_list = [k.instance_id for k in s_run_list.keys()]
-        X, Y = self._build_matrix(run_list=s_run_list, runhistory=runhistory,
-                                  instances=s_instance_id_list)
+        configs, f_map, Y = self._build_matrix(run_list=s_run_list, runhistory=runhistory,
+                                               instances=s_instance_id_list)
 
         # Also get TIMEOUT runs
         t_run_list = self.__select_runs(rh_data=copy.deepcopy(runhistory.data),
                                         select=RunType.TIMEOUT)
         t_instance_id_list = [k.instance_id for k in s_run_list.keys()]
 
-        tX, tY = self._build_matrix(run_list=t_run_list, runhistory=runhistory,
-                                    instances=t_instance_id_list)
+        _, tf_map, tY = self._build_matrix(run_list=t_run_list, runhistory=runhistory,
+                                           instances=t_instance_id_list)
 
         # if we don't have successful runs,
         # we have to return all timeout runs
         if not s_run_list:
-            return tX, tY
+            return configs, tf_map, tY
 
         if self.impute_censored_data:
             # Get all censored runs
@@ -162,28 +173,31 @@ class AbstractRunHistory2EPM(object):
                 # Store a list of instance IDs
                 c_instance_id_list = [k.instance_id for k in c_run_list.keys()]
 
-                cen_X, cen_Y = self._build_matrix(run_list=c_run_list,
-                                                  runhistory=runhistory,
-                                                  instances=c_instance_id_list)
+                _, cen_f_map, cen_Y = self._build_matrix(run_list=c_run_list,
+                                                         runhistory=runhistory,
+                                                         instances=c_instance_id_list)
 
                 # Also impute TIMEOUTS
-                cen_X = np.vstack((cen_X, tX))
+                cen_f_map = np.vstack((cen_f_map, tf_map))
                 cen_Y = np.concatenate((cen_Y, tY))
                 self.logger.debug("%d TIMOUTS, %d censored, %d regular" %
-                                  (tX.shape[0], cen_X.shape[0], X.shape[0]))
+                                  (tf_map.shape[0], cen_f_map.shape[0], f_map.shape[0]))
 
-                imp_Y = self.imputor.impute(censored_X=cen_X, censored_y=cen_Y,
-                                            uncensored_X=X, uncensored_y=Y)
+                imp_Y = self.imputor.impute(configs=configs,
+                                            censored_f_map=cen_f_map,
+                                            censored_y=cen_Y,
+                                            uncensored_f_map=f_map,
+                                            uncensored_y=Y)
 
                 # Shuffle data to mix censored and imputed data
-                X = np.vstack((X, cen_X))
+                f_map = np.vstack((f_map, cen_f_map))
                 Y = np.concatenate((Y, imp_Y))
         else:
             # If we do not impute,we also return TIMEOUT data
-            X = np.vstack((X, tX))
+            f_map = np.vstack((f_map, tf_map))
             Y = np.concatenate((Y, tY))
 
-        return X, Y
+        return configs, f_map, Y
 
     def __select_runs(self, rh_data, select):
         '''
@@ -231,76 +245,122 @@ class AbstractRunHistory2EPM(object):
 class RunHistory2EPM4LogCost(AbstractRunHistory2EPM):
 
     def _build_matrix(self, run_list, runhistory, instances=None):
-        # First build nan-matrix of size #configs x #params+1
+        '''
+            builds a matrices for X, y (and f_map) given a list of runs 
+            and the runhistory
+
+            Arguments
+            ---------
+            run_list: list
+                list of (key,run)
+            runhistory: Runhistory()
+                runhistory from which the matrices are build
+            instances: ??
+                ???
+
+            Returns
+            -------
+            configs: np.ndarray of shape = [n_configs, n_params]
+            f_map: np.ndarray of shape = [n_samples, 2]
+            y: np.ndarray of shape = [n_samples,]
+
+        '''
         n_rows = len(run_list)
-        n_cols = self.num_params
-        X = np.ones([n_rows, n_cols + self.n_feats]) * np.nan
+        configs = np.array([impute_inactive_values(runhistory.ids_config[id_+1]).get_array()
+                            for id_ in range(runhistory._n_id)])
         y = np.ones([n_rows, 1])
+        f_map = np.ones([n_rows, 2], dtype=np.uint)
 
         # Then populate matrix
         for row, (key, run) in enumerate(run_list.items()):
             # Scaling is automatically done in configSpace
-            conf = runhistory.ids_config[key.config_id]
-            conf = impute_inactive_values(conf)
-            if self.n_feats:
-                feats = self.instance_features[key.instance_id]
-                X[row, :] = np.hstack((conf.get_array(), feats))
-            else:
-                X[row, :] = conf.get_array()
+            f_map[row] = [
+                key.config_id-1, self.instances.index(key.instance_id)]
             # run_array[row, -1] = instances[row]
             y[row, 0] = run.cost
 
         y = np.log10(y)
 
-        return X, y
+        return configs, f_map, y
 
 
 class RunHistory2EPM4Cost(AbstractRunHistory2EPM):
 
     def _build_matrix(self, run_list, runhistory, instances=None):
-        # First build nan-matrix of size #configs x #params+1
+        '''
+            builds a matrices for X, y (and f_map) given a list of runs 
+            and the runhistory
+
+            Arguments
+            ---------
+            run_list: list
+                list of (key,run)
+            runhistory: Runhistory()
+                runhistory from which the matrices are build
+            instances: ??
+                ???
+
+            Returns
+            -------
+            configs: np.ndarray of shape = [n_configs, n_params]
+            f_map: np.ndarray of shape = [n_samples, 2]
+            y: np.ndarray of shape = [n_samples,]
+
+        '''
         n_rows = len(run_list)
-        n_cols = self.num_params
-        X = np.ones([n_rows, n_cols + self.n_feats]) * np.nan
+        configs = np.array([impute_inactive_values(runhistory.ids_config[id_+1]).get_array()
+                            for id_ in range(runhistory._n_id)])
         y = np.ones([n_rows, 1])
+        f_map = np.ones([n_rows, 2], dtype=np.uint)
 
         # Then populate matrix
         for row, (key, run) in enumerate(run_list.items()):
             # Scaling is automatically done in configSpace
-            conf = runhistory.ids_config[key.config_id]
-            conf = impute_inactive_values(conf)
-            if self.n_feats:
-                feats = self.instance_features[key.instance_id]
-                X[row, :] = np.hstack((conf.get_array(), feats))
-            else:
-                X[row, :] = conf.get_array()
+            f_map[row] = [
+                key.config_id-1, self.instances.index(key.instance_id)]
             # run_array[row, -1] = instances[row]
             y[row, 0] = run.cost
 
-        return X, y
+        return configs, f_map, y
 
 
 class RunHistory2EPM4EIPS(AbstractRunHistory2EPM):
 
     def _build_matrix(self, run_list, runhistory, instances=None):
+        '''
+            builds a matrices for X, y (and f_map) given a list of runs 
+            and the runhistory
+
+            Arguments
+            ---------
+            run_list: list
+                list of (key,run)
+            runhistory: Runhistory()
+                runhistory from which the matrices are build
+            instances: ??
+                ???
+
+            Returns
+            -------
+            X: np.ndarray of shape = [n_samples, n_params]
+            y: np.ndarray of shape = [n_samples,]
+            f_map: np.ndarray of shape = [n_samples, 2]
+
+        '''
         # First build nan-matrix of size #configs x #params+1
         n_rows = len(run_list)
-        n_cols = self.num_params
-        X = np.ones([n_rows, n_cols + self.n_feats]) * np.nan
-        Y = np.ones([n_rows, 2])
+        configs = np.array([impute_inactive_values(runhistory.ids_config[id_+1]).get_array()
+                            for id_ in range(runhistory._n_id)])
+        Y = np.ones([n_rows, 1])
+        f_map = np.ones([n_rows, 2], dtype=np.uint)
 
         # Then populate matrix
         for row, (key, run) in enumerate(run_list.items()):
             # Scaling is automatically done in configSpace
-            conf = runhistory.ids_config[key.config_id]
-            conf = impute_inactive_values(conf)
-            if self.n_feats:
-                feats = self.instance_features[key.instance_id]
-                X[row, :] = np.hstack((conf.get_array(), feats))
-            else:
-                X[row, :] = conf.get_array()
+            f_map[row] = [
+                key.config_id-1, self.instances.index(key.instance_id)]
             # run_array[row, -1] = instances[row]
             Y[row, 0] = run.cost
             Y[row, 1] = np.log(1 + run.time)
 
-        return X, Y
+        return configs, f_map, Y

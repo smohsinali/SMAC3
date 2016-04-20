@@ -4,10 +4,11 @@ from smac.epm.rf_with_instances import RandomForestWithInstances
 
 
 class UncorrelatedMultiObjectiveRandomForestWithInstances(object):
-    def __init__(self, target_names, types, **kwargs):
+    def __init__(self, target_names, n_insts, types, **kwargs):
         """Wrapper for the random forest to predict multiple targets.
 
-        Only the a list with the target names and the types array for the
+        Only the list with the target names, the number of instances 
+        and the types array for the
         underlying forest model are mandatory. All other hyperparameters to
         the random forest can be passed via kwargs. Consult the documentation of
         the random forest for the hyperparameters and their meanings.
@@ -16,27 +17,29 @@ class UncorrelatedMultiObjectiveRandomForestWithInstances(object):
         ----------
         target_names : list
             List of str, each entry is the name of one target dimension.
-
+        n_insts: int
+            number of instances
         types : np.ndarray
             See RandomForestWithInstances documentation
-
         kwargs
             See RandomForestWithInstances documentation
 
         """
         self.target_names = target_names
         self.num_targets = len(self.target_names)
-        self.estimators = [RandomForestWithInstances(types, **kwargs)
+        self.estimators = [RandomForestWithInstances(types, n_insts, **kwargs)
                            for i in range(self.num_targets)]
 
 
-    def train(self, X, Y, **kwargs):
+    def train(self, configs, f_map, Y, **kwargs):
         """Trains the random forest on X and y.
 
         Parameters
         ----------
-        X : np.ndarray [n_samples, n_features (config + instance features)]
+        configs : np.ndarray [n_configs, n_params]
             Input data points.
+        f_map: np.darray [n_samples, 2]
+            Mapping configs to instance features
         Y : np.ndarray [n_samples, n_objectives]
             The corresponding target values. n_objectives must match the
             number of target names specified in the constructor.
@@ -46,7 +49,7 @@ class UncorrelatedMultiObjectiveRandomForestWithInstances(object):
         self
         """
         for i, estimator in enumerate(self.estimators):
-            estimator.train(X, Y[:, i], **kwargs)
+            estimator.train(configs, f_map, Y[:, i], **kwargs)
 
         return self
 

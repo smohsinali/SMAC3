@@ -89,12 +89,10 @@ class ImputorTest(unittest.TestCase):
         self.scen.run_obj = "runtime"
         self.scen.overall_obj = "par10"
         self.scen.cutoff = 40
+        self.scen.train_insts = []
+        for i in range(101):
+            self.scen.train_insts.append(i)
         
-        types = numpy.array([2,0,0], dtype=numpy.uint)
-        self.model = RandomForestWithInstances(types=types,
-                                       instance_features=None,
-                                       seed=1234567980)
-
     def testRandomImputation(self):
         rs = numpy.random.RandomState(1)
 
@@ -105,9 +103,11 @@ class ImputorTest(unittest.TestCase):
             num_censored = int(num_samples*0.1)
             X = rs.rand(num_samples, num_feat)
             y = numpy.sin(X[:, 0:1])
+            f_map = numpy.array([[i,0] for i in range(y.shape[0])], dtype=numpy.uint)
             
             types = numpy.array([0]*num_feat, dtype=numpy.uint)
             self.model = RandomForestWithInstances(types=types,
+                                                   n_insts=y.shape[0],
                                        instance_features=None,
                                        seed=1234567980)
 
@@ -115,9 +115,10 @@ class ImputorTest(unittest.TestCase):
             y[y > cutoff] = cutoff
 
             # We have some cen data
-            cen_X = X[:num_censored, :]
+            configs = X
+            censored_f_map = f_map[:num_censored, :]
             cen_y = y[:num_censored]
-            uncen_X = X[num_censored:, :]
+            uncensored_f_map = f_map[num_censored:, :]
             uncen_y = y[num_censored:]
 
             cen_y /= 2
@@ -133,8 +134,10 @@ class ImputorTest(unittest.TestCase):
                                                  max_iter=10,
                                                  model=self.model)
             
-            imp_y = imputor.impute(censored_X=cen_X, censored_y=cen_y,
-                                   uncensored_X=uncen_X,
+            imp_y = imputor.impute(configs=configs, 
+                                   censored_f_map=censored_f_map,
+                                   censored_y=cen_y,
+                                   uncensored_f_map=uncensored_f_map, 
                                    uncensored_y=uncen_y)
 
             if imp_y is None:
@@ -145,12 +148,18 @@ class ImputorTest(unittest.TestCase):
             self.assertTrue(numpy.isfinite(imp_y).all())
 
     def testRealImputation(self):
+        
+        types = numpy.array([2,0,0], dtype=numpy.uint)
+        model = RandomForestWithInstances(types=types, n_insts=101,
+                                       instance_features=None,
+                                       seed=1234567980)
+        
         rs = numpy.random.RandomState(1)
         imputor = rfr_imputator.RFRImputator(cs=self.cs, rs=rs,
                                              cutoff=self.scen.cutoff,
                                              threshold=self.scen.cutoff*10,
                                              change_threshold=0.01, max_iter=10,
-                                             model=self.model)
+                                             model=model)
 
         r2e = runhistory2epm.RunHistory2EPM4LogCost(
             scenario=self.scen, num_params=3,

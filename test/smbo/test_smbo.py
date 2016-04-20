@@ -49,7 +49,7 @@ class TestSMBO(unittest.TestCase):
     def test_init_only_scenario_runtime(self):
         smbo = SMBO(self.scenario)
         self.assertIsInstance(smbo.model, RandomForestWithInstances)
-        np.testing.assert_allclose(smbo.types, smbo.model.types)
+        np.testing.assert_allclose(np.hstack((smbo.types, np.zeros(1))), smbo.model.types)
         self.assertIsInstance(smbo.rh2EPM, RunHistory2EPM4LogCost)
         self.assertIsInstance(smbo.acquisition_func, EI)
 
@@ -57,7 +57,7 @@ class TestSMBO(unittest.TestCase):
         self.scenario.run_obj = 'quality'
         smbo = SMBO(self.scenario)
         self.assertIsInstance(smbo.model, RandomForestWithInstances)
-        np.testing.assert_allclose(smbo.types, smbo.model.types)
+        np.testing.assert_allclose(np.hstack((smbo.types, np.zeros(1))), smbo.model.types)
         self.assertIsInstance(smbo.rh2EPM, RunHistory2EPM4Cost)
         self.assertIsInstance(smbo.acquisition_func, EI)
 
@@ -66,7 +66,7 @@ class TestSMBO(unittest.TestCase):
             self.scenario.run_obj = objective
             types = get_types(self.scenario.cs, None)
             umrfwi = UncorrelatedMultiObjectiveRandomForestWithInstances(
-                ['cost', 'runtime'], types)
+                ['cost', 'runtime'], 1, types)
             eips = EIPS(umrfwi)
             rh2EPM = RunHistory2EPM4EIPS(self.scenario, 2)
             smbo = SMBO(self.scenario, model=umrfwi, acquisition_function=eips,

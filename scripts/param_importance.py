@@ -114,7 +114,6 @@ class EPMImportance(object):
         param_ids = range(self.num_params)
         used = []
         used.extend(range(self.num_params,len(self.types))) # always use all features
-        
         for _ in range(self._MAX_P):
             scores = []
             for p in param_ids:
@@ -131,7 +130,8 @@ class EPMImportance(object):
                     y_train = y[train]
                     X_test = X_l[test]
                     y_test = y[test]
-                    
+                    np.save("X.np", X_train)
+                    np.save("y.np", y_train)
                     model.train(X_train,y_train)
                     y_pred = model._predict(X_test)[0]
         
@@ -162,8 +162,8 @@ if __name__ == "__main__":
     args_ = parser.parse_args()
     
     logging.basicConfig(level=args_.verbose_level)
-    if args_.verbose_level == "DEBUG":
-            self.logger.parent.level = 10
+    #if args_.verbose_level == "DEBUG":
+    #        logger.parent.level = 10
     
     epm_imp = EPMImportance(scenario_fn=args_.scenario_file, 
                             runhistoy_fn=args_.runhistory)

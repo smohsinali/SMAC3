@@ -55,7 +55,7 @@ class RFRImputator(smac.epm.base_imputor.BaseImputor):
         # Never use a lower variance than this
         self.var_threshold = 10 ** -2
 
-    def impute(self, censored_X, censored_y, uncensored_X, uncensored_y):
+    def impute(self, configs, censored_f_map, censored_y, uncensored_f_map, uncensored_y):
         """
         impute runs and returns imputed y values
 
@@ -70,15 +70,15 @@ class RFRImputator(smac.epm.base_imputor.BaseImputor):
         uncensored_y : array
             y matrix of uncensored data
         """
-        if censored_X.shape[0] == 0:
+        if censored_f_map.shape[0] == 0:
             self.logger.critical("Nothing to impute, return None")
             return None
 
         # first learn model without censored data
-        self.model.train(uncensored_X, uncensored_y)
+        self.model.train(configs, uncensored_f_map, uncensored_y)
 
         self.logger.debug("Going to impute %d y-values with %s" %
-                          (censored_X.shape[0], str(self.model)))
+                          (censored_f_map.shape[0], str(self.model)))
 
         imputed_y = None  # define this, if imputation fails
 
@@ -90,6 +90,8 @@ class RFRImputator(smac.epm.base_imputor.BaseImputor):
         while True:
             self.logger.debug("Iteration %d of %d" % (it, self.max_iter))
 
+            censored_X = numpy.array([numpy.hstack(
+                (configs[c], self.model.instance_features[i])) for c, i in censored_f_map])
             # predict censored y values
             y_mean, y_var = self.model.predict(censored_X)
             y_var[y_var < self.var_threshold] = self.var_threshold
@@ -127,20 +129,21 @@ class RFRImputator(smac.epm.base_imputor.BaseImputor):
 
             self.logger.debug("Change: %f" % change)
 
-            X = numpy.concatenate((uncensored_X, censored_X))
+            f_map = numpy.concatenate((uncensored_f_map, censored_f_map))
             y = numpy.concatenate((uncensored_y, imputed_y))
 
-            if change > self.change_threshold or it == 0:
-                self.model.train(X, y)
-            else:
-                break
-
             it += 1
+
             if it > self.max_iter:
                 break
 
+            if change > self.change_threshold or it == 0:
+                self.model.train(configs, f_map, y)
+            else:
+                break
+
         self.logger.debug("Imputation used %d/%d iterations, last_change=%f" %
-                          (it, self.max_iter, change))
+                          (it-1, self.max_iter, change))
 
         imputed_y = numpy.array(imputed_y, dtype=numpy.float)
         imputed_y[imputed_y >= self.threshold] = self.threshold

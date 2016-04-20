@@ -4,7 +4,7 @@ import logging
 import pyrfr.regression
 
 
-__author__ = "Aaron Klein"
+__author__ = "Aaron Klein, Marius Lindauer, Matthias Feurer"
 __copyright__ = "Copyright 2015, ML4AAD"
 __license__ = "AGPLv3"
 __maintainer__ = "Aaron Klein"
@@ -26,6 +26,8 @@ class RandomForestWithInstances(object):
         2 dimension where the first dimension consists of 3 different
         categorical choices and the second dimension is continuous than we
         have to pass np.array([2, 0]). Note that we count starting from 0.
+    n_insts: int
+        number of instances
     instance_features: np.ndarray (I, K)
         Contains the K dimensional instance features
         of the I different instances
@@ -50,6 +52,7 @@ class RandomForestWithInstances(object):
     '''
 
     def __init__(self, types,
+                 n_insts,
                  instance_features=None,
                  num_trees=30,
                  do_bootstrapping=True,
@@ -62,8 +65,13 @@ class RandomForestWithInstances(object):
                  max_num_nodes=1000,
                  seed=42):
 
-        self.instance_features = instance_features
-        self.types = types
+        if instance_features is not None:
+            self.instance_features = instance_features
+            self.types = types
+        else:
+            # dummy instance features
+            self.instance_features = np.zeros((n_insts, 1))
+            self.types = np.hstack((types, np.zeros((1), dtype=np.uint)))
 
         self.rf = pyrfr.regression.binary_rss()
         self.rf.num_trees = num_trees
@@ -90,13 +98,15 @@ class RandomForestWithInstances(object):
         # Never use a lower variance than this
         self.var_threshold = 10 ** -5
 
-    def train(self, X, y, **kwargs):
+    def train(self, configs, f_map, y, **kwargs):
         """Trains the random forest on X and y.
 
         Parameters
         ----------
-        X : np.ndarray [n_samples, n_features (config + instance features)]
+        configs : np.ndarray [n_configs, n_params]
             Input data points.
+        f_map: np.darray [n_samples, 2]
+            Mapping configs to instance features
         Y : np.ndarray [n_samples, ]
             The corresponding target values.
 
@@ -105,17 +115,24 @@ class RandomForestWithInstances(object):
         self
         """
 
-        self.X = X
-        self.y = y
-
         y = y.flatten()
-        data = pyrfr.regression.numpy_data_container(self.X, y, self.types)
+
+        data = pyrfr.regression.mostly_continuous_data_with_instances_container(
+            configs.shape[1], self.instance_features.shape[1])
+        data.import_configurations(configs)
+        data.import_instances(self.instance_features)
+        data.add_data_points(f_map, y)
+        # needs to be stored for the marginalized predictions
+        self.data = data
 
         self.rf.fit(data)
         return self
 
     def predict(self, X):
         """Predict means and variances for given X.
+        If the RF got no instance features,
+        an hallucinated 0 was appended to each sample.
+        Needs also to be done here.
 
         Parameters
         ----------
@@ -146,6 +163,9 @@ class RandomForestWithInstances(object):
 
     def _predict(self, x):
         """Predict mean and variance for given x.
+        If the RF got no instance features,
+        an hallucinated 0 was appended to each sample.
+        Needs also to be done here.
 
         Parameters
         ----------
@@ -185,11 +205,11 @@ class RandomForestWithInstances(object):
             return self.predict(X)
         else:
             n_instance_features = self.instance_features.shape[1]
-            n_instances = len(self.instance_features)
 
         if len(X.shape) != 2:
             raise ValueError(
                 'Expected 2d array, got %dd array!' % len(X.shape))
+
         if X.shape[1] != self.types.shape[0] - n_instance_features:
             raise ValueError('Rows in X should have %d entries but have %d!' %
                              (self.types.shape[0] - n_instance_features,
@@ -198,15 +218,16 @@ class RandomForestWithInstances(object):
         mean = np.zeros(X.shape[0])
         var = np.zeros(X.shape[0])
         for i, x in enumerate(X):
-            X_ = np.hstack(
-                (np.tile(x, (n_instances, 1)), self.instance_features))
-            means, vars = self.predict(X_)
-            var_x = np.mean(vars) + np.var(means)
+
+            x_ = np.hstack((x, np.zeros((self.instance_features.shape[1]))))
+            mean_x, var_x = self.rf.predict_marginalized_over_instances(
+                x_, self.data)
+
             if var_x < self.var_threshold:
                 var_x = self.var_threshold
 
             var[i] = var_x
-            mean[i] = np.mean(means)
+            mean[i] = mean_x
 
         var[var < self.var_threshold] = self.var_threshold
         var[np.isnan(var)] = self.var_threshold

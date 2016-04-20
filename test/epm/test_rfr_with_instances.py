@@ -15,7 +15,7 @@ class TestRFWithInstances(unittest.TestCase):
     def test_predict_wrong_X_dimensions(self):
         rs = np.random.RandomState(1)
 
-        model = RandomForestWithInstances(np.zeros((10,), dtype=np.uint))
+        model = RandomForestWithInstances(np.zeros((10,), dtype=np.uint), 10)
         X = rs.rand(10)
         self.assertRaisesRegex(ValueError, "Expected 2d array, got 1d array!",
                                model.predict, X)
@@ -24,17 +24,19 @@ class TestRFWithInstances(unittest.TestCase):
                                model.predict, X)
 
         X = rs.rand(10, 5)
-        self.assertRaisesRegex(ValueError, "Rows in X should have 10 entries "
+        self.assertRaisesRegex(ValueError, "Rows in X should have 11 entries "
                                            "but have 5!",
                                model.predict, X)
 
     def test_predict(self):
         rs = np.random.RandomState(1)
-        X = rs.rand(20, 10)
+        X = rs.rand(10, 10)
         Y = rs.rand(10, 1)
-        model = RandomForestWithInstances(np.zeros((10,), dtype=np.uint))
-        model.train(X[:10], Y[:10])
-        m_hat, v_hat = model.predict(X[10:])
+        f_map = np.array([[i,0] for i in range(10)], dtype=np.uint)
+        model = RandomForestWithInstances(np.zeros((10,), dtype=np.uint), 10)
+        model.train(X, f_map, Y[:10])
+        X = rs.rand(10, 11)
+        m_hat, v_hat = model.predict(X)
         self.assertEqual(m_hat.shape, (10, 1))
         self.assertEqual(v_hat.shape, (10, 1))
 
@@ -53,11 +55,13 @@ class TestRFWithInstances(unittest.TestCase):
         rf_mock.side_effect = SideEffect()
 
         rs = np.random.RandomState(1)
-        X = rs.rand(20, 10)
+        X = rs.rand(10, 10)
         Y = rs.rand(10, 1)
-        model = RandomForestWithInstances(np.zeros((10,), dtype=np.uint))
-        model.train(X[:10], Y[:10])
-        m_hat, v_hat = model.predict(X[10:])
+        f_map = np.array([[i,0] for i in range(10)], dtype=np.uint)
+        model = RandomForestWithInstances(np.zeros((10,), dtype=np.uint), 10)
+        model.train(X, f_map, Y[:10])
+        X = rs.rand(10, 11)
+        m_hat, v_hat = model.predict(X)
         self.assertEqual(m_hat.shape, (10, 1))
         self.assertEqual(v_hat.shape, (10, 1))
         self.assertEqual(rf_mock.call_count, 10)
@@ -67,11 +71,13 @@ class TestRFWithInstances(unittest.TestCase):
 
     def test__predict(self):
         rs = np.random.RandomState(1)
-        X = rs.rand(20, 10)
+        X = rs.rand(10, 10)
         Y = rs.rand(10, 1)
-        model = RandomForestWithInstances(np.zeros((10,), dtype=np.uint))
-        model.train(X[:10], Y[:10])
-        m_hat, v_hat = model._predict(X[10])
+        f_map = np.array([[i,0] for i in range(10)], dtype=np.uint)
+        model = RandomForestWithInstances(np.zeros((10,), dtype=np.uint), 10)
+        model.train(X, f_map, Y[:10])
+        x = rs.rand(10)
+        m_hat, v_hat = model._predict(x)
         self.assertIsInstance(m_hat, float)
         self.assertIsInstance(v_hat, float)
         self.assertRaisesRegex(ValueError, 'Buffer has wrong number of '
@@ -81,7 +87,7 @@ class TestRFWithInstances(unittest.TestCase):
     def test_predict_marginalized_over_instances_wrong_X_dimensions(self):
         rs = np.random.RandomState(1)
 
-        model = RandomForestWithInstances(np.zeros((10,), dtype=np.uint),
+        model = RandomForestWithInstances(np.zeros((10,), dtype=np.uint), 10,
                                           instance_features=rs.rand(10, 2))
         X = rs.rand(10)
         self.assertRaisesRegex(ValueError, "Expected 2d array, got 1d array!",
@@ -100,48 +106,25 @@ class TestRFWithInstances(unittest.TestCase):
         """The RF should fall back to the regular predict() method."""
 
         rs = np.random.RandomState(1)
-        X = rs.rand(20, 10)
+        X = rs.rand(10, 10)
         Y = rs.rand(10, 1)
-        model = RandomForestWithInstances(np.zeros((10,), dtype=np.uint))
-        model.train(X[:10], Y[:10])
-        model.predict(X[10:])
+        f_map = np.array([[i,0] for i in range(10)], dtype=np.uint)
+        model = RandomForestWithInstances(np.zeros((10,), dtype=np.uint), 10)
+        model.train(X, f_map, Y[:10])
+        X = rs.rand(10, 10)
+        model.predict(X)
         self.assertEqual(rf_mock.call_count, 1)
 
     def test_predict_marginalized_over_instances(self):
         rs = np.random.RandomState(1)
         X = rs.rand(20, 10)
         F = rs.rand(10, 5)
-        Y = rs.rand(len(X) * len(F), 1)
-        X_ = rs.rand(200, 15)
-
-        model = RandomForestWithInstances(np.zeros((15,), dtype=np.uint),
+        Y = rs.rand(X.shape[1] * F.shape[1], 1)
+        f_map = np.array([[i,j] for i in range(X.shape[1]) for j in range(F.shape[1])], dtype=np.uint)
+        
+        model = RandomForestWithInstances(np.zeros((15,), dtype=np.uint), X.shape[1] * F.shape[1],
                                           instance_features=F)
-        model.train(X_, Y)
+        model.train(X, f_map, Y)
         means, vars = model.predict_marginalized_over_instances(X)
         self.assertEqual(means.shape, (20, 1))
         self.assertEqual(vars.shape, (20, 1))
-
-    @mock.patch.object(RandomForestWithInstances, 'predict')
-    def test_predict_marginalized_over_instances_mocked(self, rf_mock):
-        """Use mock to count the number of calls to predict()"""
-        class SideEffect(object):
-            def __call__(self, X):
-                # Numpy array of number 0 to X.shape[0]
-                rval = np.array(list(range(X.shape[0]))).reshape((-1, 1))
-                # Return mean and variance
-                return rval, rval
-
-        rf_mock.side_effect = SideEffect()
-
-        rs = np.random.RandomState(1)
-        F = rs.rand(10, 5)
-
-        model = RandomForestWithInstances(np.zeros((15,), dtype=np.uint),
-                                          instance_features=F)
-        means, vars = model.predict_marginalized_over_instances(rs.rand(11, 10))
-        self.assertEqual(rf_mock.call_count, 11)
-        self.assertEqual(means.shape, (11, 1))
-        self.assertEqual(vars.shape, (11, 1))
-        for i in range(11):
-            self.assertEqual(means[i], 4.5)
-            self.assertEqual(vars[i], 12.75)

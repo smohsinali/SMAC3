@@ -16,12 +16,14 @@ else:
 class TestUncorrelatedMultiObjectiveWrapper(unittest.TestCase):
     def test_train_and_predict_with_rf(self):
         rs = np.random.RandomState(1)
-        X = rs.rand(20, 10)
+        X = rs.rand(10, 10)
         Y = rs.rand(10, 2)
+        f_map = np.array([[i,0] for i in range(10)], dtype=np.uint)
         model = UncorrelatedMultiObjectiveRandomForestWithInstances(
-            ['cost', 'ln(runtime)'], np.zeros((10, ), dtype=np.uint))
-        model.train(X[:10], Y)
-        m, v = model.predict(X[10:])
+            ['cost', 'ln(runtime)'], 10, np.zeros((10, ), dtype=np.uint))
+        model.train(X, f_map, Y)
+        X = rs.rand(10, 11)
+        m, v = model.predict(X)
         self.assertEqual(m.shape, (10, 2))
         self.assertEqual(v.shape, (10, 2))
 
@@ -40,13 +42,15 @@ class TestUncorrelatedMultiObjectiveWrapper(unittest.TestCase):
         rf_mock.side_effect = SideEffect()
 
         rs = np.random.RandomState(1)
-        X = rs.rand(20, 10)
+        X = rs.rand(10, 10)
         Y = rs.rand(10, 3)
+        f_map = np.array([[i,0] for i in range(10)], dtype=np.uint)
         model = UncorrelatedMultiObjectiveRandomForestWithInstances(
-            ['cost', 'ln(runtime)', 'foo'], np.zeros((10,), dtype=np.uint))
+            ['cost', 'ln(runtime)', 'foo'], 10, np.zeros((10,), dtype=np.uint))
 
-        model.train(X[:10], Y[:10])
-        m_hat, v_hat = model.predict(X[10:])
+        model.train(X, f_map, Y[:10])
+        X = rs.rand(10, 11)
+        m_hat, v_hat = model.predict(X)
         self.assertEqual(m_hat.shape, (10, 3))
         self.assertEqual(v_hat.shape, (10, 3))
         self.assertEqual(rf_mock.call_count, 3)

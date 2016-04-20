@@ -91,9 +91,9 @@ class SMBO(BaseSolver):
         rng: numpy.random.RandomState
             Random number generator
         '''
-        
+
         self.runhistory = RunHistory()
-        
+
         self.logger = logging.getLogger("smbo")
 
         if rng is None:
@@ -112,6 +112,7 @@ class SMBO(BaseSolver):
         self.types = get_types(self.config_space, scenario.feature_array)
         if model is None:
             self.model = RandomForestWithInstances(self.types,
+                                                   len(scenario.train_insts),
                                                    scenario.feature_array,
                                                    seed=self.rng.randint(
                                                        1234567980))
@@ -263,11 +264,13 @@ class SMBO(BaseSolver):
         while True:
 
             start_time = time.time()
-            X, Y = self.rh2EPM.transform(self.runhistory)
+            configs, f_map, Y = self.rh2EPM.transform(self.runhistory)
 
             self.logger.debug("Search for next configuration")
             # get all found configurations sorted according to acq
-            challengers = self.choose_next(X, Y)
+            self.model.train(configs, f_map, Y)
+
+            challengers = self.choose_next()
 
             time_spend = time.time() - start_time
             logging.debug(
@@ -307,25 +310,24 @@ class SMBO(BaseSolver):
 
         return self.incumbent
 
-    def choose_next(self, X, Y, num_interleaved_random=1010,
+    def choose_next(self, num_interleaved_random=1010,
                     num_configurations_by_random_search_sorted=1000,
                     num_configurations_by_local_search=10):
         """Choose next candidate solution with Bayesian optimization.
 
         Parameters
         ----------
-        X : (N, D) numpy array
-            Each row contains a configuration and one set of
-            instance features.
-        Y : (N, O) numpy array
-            The function values for each configuration instance pair.
+        num_configurations_by_local_search : int, default=10
+            Number of local searches.
+
+        num_configurations_by_random_search : int, default=1000
+            Number of configurations generated with random search.
 
         Returns
         -------
         list
             List of 2020 suggested configurations to evaluate.
         """
-        self.model.train(X, Y)
 
         if self.runhistory.empty():
             incumbent_value = 0.0

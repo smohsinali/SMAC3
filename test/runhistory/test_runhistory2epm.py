@@ -52,6 +52,7 @@ class RunhistoryTest(unittest.TestCase):
                additional_info={"start_time": 10})
         
         scen = Scenario({"cutoff_time": 10})
+        scen.train_insts = [1,23]
 
         self.assertRaises(TypeError, runhistory2epm.RunHistory2EPM4LogCost)
 
