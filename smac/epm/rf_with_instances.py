@@ -69,6 +69,7 @@ class RandomForestWithInstances(object):
         self.rf.num_trees = num_trees
         self.rf.seed = seed
         self.rf.do_bootstrapping = do_bootstrapping
+        self.rf.compute_oob_error = do_bootstrapping
         self.rf.num_data_points_per_tree = n_points_per_tree
         max_features = 0 if ratio_features >= 1.0 else \
             max(1, int(types.shape[0] * ratio_features))
