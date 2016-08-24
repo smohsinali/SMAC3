@@ -17,6 +17,8 @@ SMAC3 requires:
 * `Cython <https://pypi.python.org/pypi/Cython/>`_
 * `pyrfr <https://pypi.python.org/pypi/pyrfr/0.2.0>`_
 
+.. _installation:
+
 Manual Installation
 -------------------
 | To install EPM from command line type the following commands in the terminal:
