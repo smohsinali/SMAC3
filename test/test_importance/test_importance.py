@@ -4,10 +4,20 @@ Created on Jun 14, 2015
 @author: Andre Biedenkapp
 '''
 import unittest
+import os
 
 from smac.parameter_importance.epmimportance import EPMImportance
 
 class ImportanceTest(unittest.TestCase):
+
+    def setUp(self):
+        base_directory = os.path.split(__file__)[0]
+        base_directory = os.path.abspath(os.path.join(base_directory, '..', '..'))
+        self.current_dir = os.getcwd()
+        os.chdir(base_directory)
+
+    def tearDown(self):
+        os.chdir(self.current_dir)
 
     # Simple test where a child is active in the beginning but the flip of the parent deactivates the child.
     def test_deactivate_child(self):

@@ -6,6 +6,13 @@ Manual
 
 In the following we will show how to use **SMAC3**.
 
+.. note::
+
+    TODO:
+        * Miniexample
+        * More complex example like Spear-qcp
+        * Python Wrapper (basically annotate one of the examples [leadingones has categoricals])
+
 .. _quick:
 
 Quick Start
