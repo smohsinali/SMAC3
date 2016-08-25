@@ -18,7 +18,15 @@ In the following we will show how to use **SMAC3**.
 Quick Start
 -----------
 | If you haven't installed *SMAC* yet take a look at the `installation instructions <installation.html>`_ and make sure that all the requirements are fulfilled.
-| In the examples folder you can find examples that illustrate how to write scenario files that allow you to use *SMAC* to automatically configure an algorithm for you, as well as examples that show how to directly use *SMAC* in python.
+| In the examples folder you can find examples that illustrate how to write scenario files that allow you to use *SMAC* to automatically configure an algorithm, as well as examples that show how to directly use *SMAC* in python.
+
+We'll demonstrate the usage of *SMAC* on the most basic scenario, the optimization of a continuous blackbox function. The first simple example is the minimization of a standard 2-dimensional continuous test function (branin).
+
+In the rootdirectory of *SMAC* type the following commands:
+
+.. code-block:: bash
+
+    
 
 Spear-QCP
 _________
@@ -29,9 +37,9 @@ _________
 
     cd examples/spear_qcp && ls -l
 
-| In this folder you'll see the following files:
-|  **features.txt**:
-|    The feature file is contains the features for each instance in a csv-format.
+In this folder you'll see the following files and directories:
+    * **features.txt**:
+     The feature file is contains the features for each instance in a csv-format.
 
      +--------------------+--------------------+--------------------+-----+
      |      instance      | name of feature 1  | name of feature 2  | ... |
@@ -40,19 +48,49 @@ _________
      +--------------------+--------------------+--------------------+-----+
      |         ...        |          ...       |          ...       | ... |
      +--------------------+--------------------+--------------------+-----+
-|
-|  **instances.txt**
-|    The instance file contains the names of all instances one might want to consider during the optimization process.
-|
-|  **scenario.txt**
-|    The scenario file contains all the necessary information about the configuration scenario at hand. A more indepth description about the different options in a scenario file can be found below.
-|
-|  **run.sh**
-|     A shell script calling *SMAC* with the following command:
-|     :bash:`python ../../scripts/smac --scenario scenario.txt --verbose DEBUG`
-|     This runs *SMAC* with the scenario options specified in the scenario.txt file.
-|
-| The directory **target_algorithms** contains the wrapper and the executable for Spear and the **instances** folder contains the instances on which *SMAC* will configure Spear.
+
+    * **instances.txt**
+        The instance file contains the names of all instances one might want to consider during the optimization process.
+
+    * **scenario.txt**
+        The scenario file contains all the necessary information about the configuration scenario at hand.
+        For this example the following options were used:
+
+        * *algo*:
+
+            .. code-block:: bash
+
+                python -u ./target_algorithm/scripts/SATCSSCWrapper.py --mem-limit 1024 --script ./target_algorithm/spear-python/spearCSSCWrapper.py
+
+            This specifies the wrapper that *SMAC* executes with a prespecified syntax in order to evaluate the algorithm to be optimized.
+            This wrapper script takes an instantiation of the parameters as input, runs the algorithm with these parameters, and returns
+            how well it did; since every algorithm has a different input and output format, this wrapper acts as a mediator between the
+            algorithm and *SMAC*, which executes the wrapper through a command line call.
+
+            An example call would look something like this:
+
+            .. code-block:: bash
+
+                <algo> <instance> <instance_specifics> <runtime cutoff> <runlength> <seed> <solver parameters>
+
+            For *SMAC* to be able to interpret the results of the algorithm run, the wrapper returns the results of the algorithm run as follows:
+            :bash:`STATUS, runtime, runlength, quality, seed, instance-specifics`
+
+        * *paramfile*:
+            This parameter specifies which pcs-file to use and where it is located.
+
+            The pcs-file specifies the Parameter Configuration Space file, which lists the algorithm's parameters, their domains, and default values (one per line)
+
+            In this example we are dealing with 26 parameters of which 12 are categorical and 14 are continuous. Out of these 26
+            parameters, 9 parameters are conditionals (they are only active if their parent parameter takes on a certain value).
+
+    * **run.sh**
+        A shell script calling *SMAC* with the following command:
+        :bash:`python ../../scripts/smac --scenario scenario.txt --verbose DEBUG`
+        This runs *SMAC* with the scenario options specified in the scenario.txt file.
+
+    * **target_algorithms** contains the wrapper and the executable for Spear.
+    * **instances** folder contains the instances on which *SMAC* will configure Spear.
 
 To run the example type one of the two commands below into a terminal:
 
