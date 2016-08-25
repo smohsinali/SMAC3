@@ -22,11 +22,43 @@ Quick Start
 
 We'll demonstrate the usage of *SMAC* on the most basic scenario, the optimization of a continuous blackbox function. The first simple example is the minimization of a standard 2-dimensional continuous test function (branin).
 
-In the rootdirectory of *SMAC* type the following commands:
+To run the example scenario, change into the root-directory of *SMAC* and type the following commands:
 
 .. code-block:: bash
 
-    
+    cd examples/branin
+    python ../../scripts/smac --scenario branin_scenario.txt --verbose DEBUG
+
+The python command runs *SMAC* with the specified scenario. The scenario file contains the following three lines:
+
+.. code-block:: bash
+
+    algo = python branin.py
+    paramfile = branin_pcs.pcs
+    run_obj = quality
+    runcount_limit = 500
+
+The **algo** parameter specifies how *SMAC* can evaluate the function or an algorithm that *SMAC* is optimizing. An algorithm call by *SMAC* will look something like this:
+
+    .. code-block:: bash
+
+        python branin.py 0 0 999999999.0 0 1148756733 -x1 -1.1338595629 -x2 13.8770222718
+
+    The first two parameter after the branin.py do not matter for this example since no instances are needed for the function optimization. For algorithm optimization, the first parameter holds the instance name on which the algorithm is evaluated and the second can provide extra information about the instance (rarely used).
+
+    The third parameter gives the runtime cutoff (maximal runtime) an algorithm is allowed to run and the fourth the runlength (maximal number of steps).
+
+    The fifth parameter is the random seed which is followed by the algorithm/function parameters.
+
+The **paramfile** parameter tells *SMAC* which Parameter Configuration File to use. This file contains a list of the algorithm's parameters, their domains and default values as follows:
+
+    .. code-block:: bash
+
+        x1 [-5,10] [0]
+        x2 [0,15]  [0]
+
+    x1 and x2 are both continuous parameters. x1 can take any real value in the range [-5, 10], x2 in the range [0, 15] and both have the default value 0.
+
 
 Spear-QCP
 _________

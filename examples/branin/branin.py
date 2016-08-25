@@ -6,7 +6,7 @@ def main():
     x = float(sys.argv[7])
     y = float(sys.argv[9])
     tmp = branin((x, y))
-    print('Result for SMAC: SUCCESS, -1, -1, %f, %s' % (tmp, seed))
+    print('Result for SMAC: SUCCESS, 0, 0, %f, %s' % (tmp, seed))
 
 import numpy as np
 
