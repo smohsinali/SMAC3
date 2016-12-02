@@ -1,6 +1,6 @@
 __author__ = "Marius Lindauer"
 __copyright__ = "Copyright 2015, ML4AAD"
-__license__ = "AGPLv3"
+__license__ = "3-clause BSD"
 __maintainer__ = "Marius Lindauer"
 __email__ = "lindauer@cs.uni-freiburg.de"
 __version__ = "0.0.1"
@@ -8,7 +8,7 @@ __version__ = "0.0.1"
 import os
 import logging
 import numpy
-from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
+from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter, SUPPRESS
 
 
 class CMDReader(object):
@@ -45,11 +45,25 @@ class CMDReader(object):
         req_opts = parser.add_argument_group("Optional Options")
         req_opts.add_argument("--seed", default=12345, type=int,
                               help="random seed")
-        req_opts.add_argument("--max_iterations", default=numpy.inf, type=int,
-                              help="maximal number of iterations")
         req_opts.add_argument("--verbose_level", default=logging.INFO,
                               choices=["INFO", "DEBUG"],
                               help="random seed")
+        req_opts.add_argument("--modus", default="SMAC",
+                              choices=["SMAC", "ROAR"],
+                              help=SUPPRESS)
+        req_opts.add_argument("--warmstart_runhistory", default=None,
+                              nargs="*",
+                              help=SUPPRESS)  # list of runhistory dump files
+        # scenario corresponding to --warmstart_runhistory; 
+        # pcs and feature space has to be identical to --scenario_file
+        req_opts.add_argument("--warmstart_scenario", default=None,
+                              nargs="*",
+                              help=SUPPRESS)  
+        req_opts.add_argument("--warmstart_incumbent", default=None,
+                              nargs="*",
+                              help=SUPPRESS)# list of trajectory dump files, 
+                                            # reads runhistory 
+                                            # and uses final incumbent as challenger 
 
         args_, misc = parser.parse_known_args()
         self._check_args(args_)

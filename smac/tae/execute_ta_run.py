@@ -1,9 +1,12 @@
+import sys
 import logging
-from subprocess import Popen, PIPE
+import math
+
+import numpy as np
 
 __author__ = "Marius Lindauer"
 __copyright__ = "Copyright 2015, ML4AAD"
-__license__ = "AGPLv3"
+__license__ = "3-clause BSD"
 __maintainer__ = "Marius Lindauer"
 __email__ = "lindauer@cs.uni-freiburg.de"
 __version__ = "0.0.1"
@@ -33,7 +36,8 @@ class ExecuteTARun(object):
             the command line call to the target algorithm (wrapper)
     """
 
-    def __init__(self, ta, run_obj="runtime"):
+    def __init__(self, ta, stats=None, runhistory=None, run_obj="runtime",
+                 par_factor=1):
         """
         Constructor
 
@@ -41,15 +45,100 @@ class ExecuteTARun(object):
         ----------
             ta : list
                 target algorithm command line as list of arguments
+            runhistory: RunHistory
+                runhistory to keep track of all runs; only used if set
+            stats: Stats()
+                 stats object to collect statistics about runtime and so on                
             run_obj: str
                 run objective of SMAC
+            par_factor: int
+                penalization factor
         """
+        
         self.ta = ta
-        self.logger = logging.getLogger("ExecuteTARun")
-        pass
+        self.stats = stats
+        self.runhistory = runhistory
+        self.run_obj = run_obj
+        
+        self.par_factor = par_factor
+
+        self.logger = logging.getLogger(self.__class__.__name__)
+        self._supports_memory_limit = False
+
+    def start(self, config, instance,
+              cutoff=None,
+              seed=12345,
+              instance_specific="0"):
+        """
+            wrapper function for ExecuteTARun.run() to check configuration budget before the runs
+            and to update stats after run
+
+            Parameters
+            ----------
+                config : dictionary
+                    dictionary param -> value
+                instance : string
+                    problem instance
+                cutoff : double
+                    runtime cutoff
+                seed : int
+                    random seed
+                instance_specific: str
+                    instance specific information (e.g., domain file or solution)
+
+            Returns
+            -------
+                status: enum of StatusType (int)
+                    {SUCCESS, TIMEOUT, CRASHED, ABORT}
+                cost: float
+                    cost/regret/quality (float) (None, if not returned by TA)
+                runtime: float
+                    runtime (None if not returned by TA)
+                additional_info: dict
+                    all further additional run information
+        """
+
+        if self.stats.is_budget_exhausted():
+            self.logger.debug(
+                "Skip target algorithm run due to exhausted configuration budget")
+            return StatusType.ABORT, np.nan, 0, {"misc": "exhausted bugdet -- ABORT"}
+
+        if cutoff is not None:
+            cutoff = int(math.ceil(cutoff))
+
+        status, cost, runtime, additional_info = self.run(config=config,
+                                                          instance=instance,
+                                                          cutoff=cutoff,
+                                                          seed=seed,
+                                                          instance_specific=instance_specific)
+        
+        if self.stats.ta_runs == 0 and status in [StatusType.CRASHED, StatusType.ABORT]:
+            self.logger.critical("First run crashed -- Abort")
+            sys.exit(1)
+        
+        # update SMAC stats
+        self.stats.ta_runs += 1
+        self.stats.ta_time_used += float(runtime)
+
+        if self.run_obj == "runtime":
+            if status != StatusType.SUCCESS:
+                cost = cutoff * self.par_factor
+            else:
+                cost = runtime
+
+        self.logger.debug("Return: Status: %d, cost: %f, time. %f, additional: %s" % (
+            status, cost, runtime, str(additional_info)))
+
+        if self.runhistory:
+            self.runhistory.add(config=config,
+                                cost=cost, time=runtime, status=status,
+                                instance_id=instance, seed=seed,
+                                additional_info=additional_info)
+            
+        return status, cost, runtime, additional_info
 
     def run(self, config, instance,
-            cutoff=99999999999999.,
+            cutoff=None,
             seed=12345,
             instance_specific="0"):
         """
@@ -63,8 +152,9 @@ class ExecuteTARun(object):
                     dictionary param -> value
                 instance : string
                     problem instance
-                cutoff : double
-                    runtime cutoff
+                cutoff : int, optional
+                    Wallclock time limit of the target algorithm. If no value is
+                    provided no limit will be enforced.
                 seed : int
                     random seed
                 instance_specific: str

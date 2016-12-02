@@ -1,19 +1,17 @@
 import sys
-import logging
 from subprocess import Popen, PIPE
 
-from smac.tae.execute_ta_run import StatusType
-from smac.stats.stats import Stats
+from smac.tae.execute_ta_run import StatusType, ExecuteTARun
 
 __author__ = "Marius Lindauer"
 __copyright__ = "Copyright 2015, ML4AAD"
-__license__ = "AGPLv3"
+__license__ = "3-clause BSD"
 __maintainer__ = "Marius Lindauer"
 __email__ = "lindauer@cs.uni-freiburg.de"
 __version__ = "0.0.1"
 
 
-class ExecuteTARunOld(object):
+class ExecuteTARunOld(ExecuteTARun):
 
     """
         executes a target algorithm run with a given configuration
@@ -30,26 +28,8 @@ class ExecuteTARunOld(object):
             penalized average runtime factor
     """
 
-    def __init__(self, ta, run_obj="runtime", par_factor=1):
-        """
-        Constructor
-
-        Parameters
-        ----------
-            ta : list
-                target algorithm command line as list of arguments
-            run_obj: str
-                run objective of SMAC
-            par_factor: int
-                penalized average runtime factor
-        """
-        self.ta = ta
-        self.logger = logging.getLogger("ExecuteTARun")
-        self.run_obj = run_obj
-        self.par_factor = par_factor
-
     def run(self, config, instance=None,
-            cutoff=99999999999999.,
+            cutoff=None,
             seed=12345,
             instance_specific="0"
             ):
@@ -82,10 +62,10 @@ class ExecuteTARunOld(object):
                     all further additional run information
         """
 
-        Stats.ta_runs += 1
-
         if instance is None:
             instance = "0"
+        if cutoff is None:
+            cutoff = 99999999999999.
 
         # TOOD: maybe replace fixed instance specific and cutoff_length (0) to
         # other value
@@ -118,7 +98,6 @@ class ExecuteTARunOld(object):
                     status, runtime, runlength, quality, seed, additional_info = fields
                     additional_info = {"additional_info": additional_info}
 
-                Stats.ta_time_used += float(runtime)
                 runtime = min(float(runtime), cutoff)
                 quality = float(quality)
                 seed = int(seed)
@@ -143,10 +122,7 @@ class ExecuteTARunOld(object):
             self.logger.warn("\n".join(stderr_.split("\n")[-5:]))
 
         if self.run_obj == "runtime":
-            if status != StatusType.SUCCESS:
-                cost = runtime * self.par_factor
-            else:
-                cost = runtime
+            cost = runtime
         else:
             cost = quality
 

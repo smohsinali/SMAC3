@@ -1,16 +1,7 @@
-from __future__ import division, print_function
-
-
 # TODO: remove really ugly boilerplate
 import logging
-import sys
 import os
 import inspect
-cmd_folder = os.path.realpath(
-    os.path.abspath(os.path.split(inspect.getfile(inspect.currentframe()))[0]))
-cmd_folder = os.path.realpath(os.path.join(cmd_folder, ".."))
-if cmd_folder not in sys.path:
-    sys.path.append(cmd_folder)
 
 import numpy as np
 from sklearn.cross_validation import KFold
@@ -20,13 +11,11 @@ from smac.configspace import ConfigurationSpace
 from ConfigSpace.hyperparameters import CategoricalHyperparameter, \
     UniformFloatHyperparameter, UniformIntegerHyperparameter
 
-from smac.tae.execute_func import ExecuteTAFunc
+from smac.tae.execute_func import ExecuteTAFuncDict
 from smac.scenario.scenario import Scenario
-from smac.smbo.smbo import SMBO
-from smac.stats.stats import Stats
+from smac.facade.smac_facade import SMAC
 
-
-def rfr(cfg):
+def rfr(cfg, seed):
     """
     We optimize our own random forest with SMAC 
     """
@@ -72,7 +61,7 @@ def rfr(cfg):
     
 
 logger = logging.getLogger("Optimizer") # Enable to show Debug outputs
-logger.parent.level = 20 #info level:20, debug:10
+logging.basicConfig(level=logging.INFO)
 
 folder = os.path.realpath(
     os.path.abspath(os.path.split(inspect.getfile(inspect.currentframe()))[0]))
@@ -83,10 +72,7 @@ y = np.array(np.loadtxt(os.path.join(folder,"data/y.csv")), dtype=np.float32)
 
 # cv folds
 kf = KFold(X.shape[0], n_folds=4)
- 
-# register function to be optimize
-taf = ExecuteTAFunc(rfr)
- 
+
 # build Configuration Space which defines all parameters and their ranges
 # to illustrate different parameter types,
 # we use continuous, integer and categorical parameters
@@ -116,27 +102,28 @@ cs.add_hyperparameter(max_depth)
 max_num_nodes = UniformIntegerHyperparameter("max_num_nodes", 100, 100000, default=1000)
 cs.add_hyperparameter(max_num_nodes)
  
-# example call of the function
-# it returns: Status, Cost, Runtime, Additional Infos
-def_value = taf.run(cs.get_default_configuration())[1]
-print("Default Value: %.2f" % (def_value))
- 
+# SMAC scenario oject
 scenario = Scenario({"run_obj": "quality",  # we optimize quality (alternative runtime)
                      "runcount-limit": 400,  # at most 200 function evaluations
                      "cs": cs, # configuration space
-                     "deterministic": "true" 
+                     "deterministic": "true",
+                     "memory_limit": 1024,
                      })
- 
-# necessary to use stats options related to scenario information
-Stats.scenario = scenario
- 
+
 # Optimize
-smbo = SMBO(scenario=scenario, rng=np.random.RandomState(42),
-            tae_runner=taf)
-smbo.run(max_iters=999)
- 
-Stats.print_stats()
-print("Final Incumbent: %s" % (smbo.incumbent))
- 
-inc_value = taf.run(smbo.incumbent)[1]
+smac = SMAC(scenario=scenario, rng=np.random.RandomState(42),
+            tae_runner=rfr)
+
+# example call of the function
+# it returns: Status, Cost, Runtime, Additional Infos
+def_value = smac.solver.intensifier.tae_runner.run(
+    cs.get_default_configuration(), 1)[1]
+print("Default Value: %.2f" % (def_value))
+
+try:
+    incumbent = smac.optimize()
+finally:
+    incumbent = smac.solver.incumbent
+
+inc_value = smac.solver.intensifier.tae_runner.run(incumbent, 1)[1]
 print("Optimized Value: %.2f" % (inc_value))

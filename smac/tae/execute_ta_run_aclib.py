@@ -1,20 +1,18 @@
 import sys
-import logging
 import json
 from subprocess import Popen, PIPE
 
-from smac.tae.execute_ta_run import StatusType
-from smac.stats.stats import Stats
+from smac.tae.execute_ta_run import StatusType, ExecuteTARun
 
 __author__ = "Marius Lindauer"
 __copyright__ = "Copyright 2015, ML4AAD"
-__license__ = "AGPLv3"
+__license__ = "3-clause BSD"
 __maintainer__ = "Marius Lindauer"
 __email__ = "lindauer@cs.uni-freiburg.de"
 __version__ = "0.0.1"
 
 
-class ExecuteTARunAClib(object):
+class ExecuteTARunAClib(ExecuteTARun):
 
     """
         executes a target algorithm run with a given configuration
@@ -31,26 +29,8 @@ class ExecuteTARunAClib(object):
             penalized average runtime factor
     """
 
-    def __init__(self, ta, run_obj="runtime", par_factor=1):
-        """
-        Constructor
-
-        Parameters
-        ----------
-            ta : list
-                target algorithm command line as list of arguments
-            run_obj: str
-                run objective of SMAC
-            par_factor: int
-                penalized average runtime factor
-        """
-        self.ta = ta
-        self.logger = logging.getLogger("ExecuteTARun")
-        self.run_obj = run_obj
-        self.par_factor = par_factor
-
     def run(self, config, instance=None,
-            cutoff=99999999999999.,
+            cutoff=None,
             seed=12345,
             instance_specific="0"):
         """
@@ -82,10 +62,10 @@ class ExecuteTARunAClib(object):
                     all further additional run information
         """
 
-        Stats.ta_runs += 1
-
         if instance is None:
             instance = "0"
+        if cutoff is None:
+            cutoff = 99999999999999
 
         # TOOD: maybe replace fixed instance specific and cutoff_length (0) to
         # other value
@@ -143,8 +123,6 @@ class ExecuteTARunAClib(object):
 
         runtime = float(results["runtime"])
         
-        Stats.ta_time_used += float(runtime)
-
         if self.run_obj == "quality" and results.get("cost") is None:
             self.logger.error(
                 "The target algorithm has not returned a quality/cost value" +
@@ -153,10 +131,7 @@ class ExecuteTARunAClib(object):
             results["cost"] = 0
 
         if self.run_obj == "runtime":
-            if status != StatusType.SUCCESS:
-                cost = float(results["runtime"]) * self.par_factor
-            else:
-                cost = float(results["runtime"])
+            cost = float(results["runtime"])
         else:
             cost = float(results["cost"])
 

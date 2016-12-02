@@ -1,22 +1,22 @@
-import os
 import setuptools
 
+import smac
 
-requirements = ['setuptools',
-                'numpy>=1.6.1',
-                'scipy>=0.13.1',
-                'pyrfr',
-                'ConfigSpace',
-                'pynisher>=0.4.1']
+
+with open('requirements.txt') as fh:
+    requirements = fh.read()
+requirements = requirements.split('\n')
+requirements = [requirement.strip() for requirement in requirements]
+
 
 setuptools.setup(
     name="smac",
-    version="0.0.1dev",
-    author="Marius Lindauer, Matthias Feurer, Katharina Eggensperger, Aaron Klein, Stefan Falkner and Frank Hutter",
+    version=smac.VERSION,
+    author=smac.AUTHORS,
     author_email="fh@cs.uni-freiburg.de",
-    description=("SMAC3, a python implementation of 'Sequential Model-based "
+    description=("SMAC3, a Python implementation of 'Sequential Model-based "
                  "Algorithm Configuration'."),
-    license="GPLv3",
+    license="3-clause BSD",
     keywords="machine learning algorithm configuration hyperparameter "
              "optimization tuning",
     url="",
@@ -24,9 +24,13 @@ setuptools.setup(
     classifiers=[
         "Development Status :: 3 - Alpha",
         "Topic :: Utilities",
-        "License :: OSI Approved :: GPLv3 License",
+        "Topic :: Scientific/Engineering",
+        "Topic :: Scientific/Engineering :: Artificial Intelligence",
+        "License :: OSI Approved :: BSD License",
     ],
     platforms=['Linux'],
     install_requires=requirements,
+    tests_require=['mock',
+                   'nose'],
     test_suite='nose.collector'
 )

@@ -7,7 +7,7 @@ from smac.configspace import impute_inactive_values, get_one_exchange_neighbourh
 
 __author__ = "Aaron Klein, Marius Lindauer"
 __copyright__ = "Copyright 2015, ML4AAD"
-__license__ = "AGPLv3"
+__license__ = "3-clause BSD"
 __maintainer__ = "Aaron Klein"
 __email__ = "kleinaa@cs.uni-freiburg.de"
 __version__ = "0.0.1"
@@ -16,7 +16,7 @@ __version__ = "0.0.1"
 class LocalSearch(object):
 
     def __init__(self, acquisition_function, config_space,
-                 epsilon=0.000001, max_iterations=None, rng=None):
+                 epsilon=0.00001, max_iterations=None, rng=None):
         """
         Implementation of SMAC's local search
 

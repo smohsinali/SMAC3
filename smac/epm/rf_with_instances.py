@@ -3,16 +3,18 @@ import logging
 
 import pyrfr.regression
 
+from smac.epm.base_epm import AbstractEPM
+
 
 __author__ = "Aaron Klein, Marius Lindauer, Matthias Feurer"
 __copyright__ = "Copyright 2015, ML4AAD"
-__license__ = "AGPLv3"
+__license__ = "3-clause BSD"
 __maintainer__ = "Aaron Klein"
 __email__ = "kleinaa@cs.uni-freiburg.de"
 __version__ = "0.0.1"
 
 
-class RandomForestWithInstances(object):
+class RandomForestWithInstances(AbstractEPM):
 
     '''
     Interface to the random forest that takes instance features
@@ -52,7 +54,6 @@ class RandomForestWithInstances(object):
     '''
 
     def __init__(self, types,
-                 n_insts,
                  instance_features=None,
                  num_trees=30,
                  do_bootstrapping=True,
@@ -70,7 +71,7 @@ class RandomForestWithInstances(object):
             self.types = types
         else:
             # dummy instance features
-            self.instance_features = np.zeros((n_insts, 1))
+            self.instance_features = np.zeros((1, 1))
             self.types = np.hstack((types, np.zeros((1), dtype=np.uint)))
 
         self.rf = pyrfr.regression.binary_rss()
@@ -153,34 +154,9 @@ class RandomForestWithInstances(object):
             raise ValueError('Rows in X should have %d entries but have %d!' %
                              (self.types.shape[0], X.shape[1]))
 
-        means = np.ndarray((X.shape[0], 1))
-        vars = np.ndarray((X.shape[0], 1))
-        for i, x in enumerate(X):
-            m, v = self._predict(x)
-            means[i] = m
-            vars[i] = v
-        return means, vars
-
-    def _predict(self, x):
-        """Predict mean and variance for given x.
-        If the RF got no instance features,
-        an hallucinated 0 was appended to each sample.
-        Needs also to be done here.
-
-        Parameters
-        ----------
-        x : np.ndarray of shape = [n_features (config + instance features), ]
-
-        Returns
-        -------
-        mean : float
-            Predictive mean
-        var : float
-            Predictive variance
-        """
-        mean, var = self.rf.predict(x)
-
-        return mean, var
+        means, vars = self.rf.batch_predictions(X)
+        
+        return means.reshape((-1, 1)), vars.reshape((-1, 1))
 
     def predict_marginalized_over_instances(self, X):
         """Predict mean and variance marginalized over all instances.
@@ -202,7 +178,10 @@ class RandomForestWithInstances(object):
 
         if self.instance_features is None or \
                 len(self.instance_features) == 0:
-            return self.predict(X)
+            mean, var = self.predict(X)
+            var[var < self.var_threshold] = self.var_threshold
+            var[np.isnan(var)] = self.var_threshold
+            return mean, var
         else:
             n_instance_features = self.instance_features.shape[1]
 
