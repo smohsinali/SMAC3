@@ -1,5 +1,5 @@
 # List with valid options for the scenario-text-file.
-# These aliases are referred to as "external", opposing the "internal" aliases
+# Those aliases are referred to as "external", opposing the "internal" aliases
 # used by the Scenario-class.
 scenario_options = ['algo',
                     'cutoff_time',
